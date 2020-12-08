@@ -590,8 +590,8 @@ def get_episode_generator(episode_type):
         
         translate_train = word_excluded_set
         translate_test = word_included_set
-        generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=10, nquery=5, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair=word_pair, ro_en_lst=ro_en_lst)
-        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=10, nquery=5, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair, ro_en_lst=ro_en_lst)
+        generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=50, nquery=10, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair=word_pair, ro_en_lst=ro_en_lst)
+        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=50, nquery=10, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair, ro_en_lst=ro_en_lst)
     else:
         raise Exception("episode_type is not valid" )
     return generate_episode_train, generate_episode_test, input_lang, output_lang
@@ -885,7 +885,8 @@ if __name__ == "__main__":
                 else:
                     evaluation_battery_translate(samples_val, encoder, decoder, input_lang, output_lang, max_length_eval)
 
-                if episode % 1000 == 0 or episode == num_episodes:
+                if episode % 100 == 0 or episode == num_episodes:
+                    print('EPISODE: ' + str(episode))
                     state = {'encoder_state_dict': encoder.state_dict(),
                                 'decoder_state_dict': decoder.state_dict(),
                                 'input_lang': input_lang,
