@@ -20,7 +20,8 @@ from masked_cross_entropy import *
 import generate_episode as ge
 import re
 import sys 
-
+from bleu import multi_list_bleu
+import nltk
 # --
 # Main routine for training meta seq2seq models
 # --
@@ -213,6 +214,30 @@ def extract(include,arr):
     assert len(include)==len(arr)
     return [a for idx,a in enumerate(arr) if include[idx]]
 
+def evaluation_battery_translate(sample_eval_list, encoder, decoder, input_lang, output_lang, max_length, verbose=False):
+    for idx,sample in enumerate(sample_eval_list):
+        yq_predict, in_support = evaluate_translate(sample, encoder, decoder, input_lang, output_lang, max_length)
+        #display_input_output(extract(np.logical_not(in_support),sample['xq']),extract(np.logical_not(in_support),yq_predict),extract(np.logical_not(in_support),sample['yq']))
+        input_patterns = extract(np.logical_not(in_support),sample['xq'])
+        output_patterns = extract(np.logical_not(in_support),yq_predict)
+        target_patterns = extract(np.logical_not(in_support),sample['yq'])
+        inp = []
+        out = []
+        tgt = []
+        for i in range(len(input_patterns)):
+            inp.append(' '.join(input_patterns[i]))
+            out.append(' '.join(output_patterns[i])) 
+            tgt.append(' '.join(target_patterns[i]))
+            print(' '.join(input_patterns[i]))
+            print(' '.join(output_patterns[i])) 
+            print(' '.join(target_patterns[i])) 
+        print(len(tgt))
+        print(len(out))
+        print(nltk.translate.bleu_score.corpus_bleu(tgt, out))
+
+
+
+
 def evaluation_battery(sample_eval_list, encoder, decoder, input_lang, output_lang, max_length, verbose=False):
     # Evaluate a list of episodes
     #
@@ -245,6 +270,64 @@ def evaluation_battery(sample_eval_list, encoder, decoder, input_lang, output_la
             print('  generalization items; ' + str(round(acc_val_novel,3)) + '% correct')
             display_input_output(extract(np.logical_not(in_support),sample['xq']),extract(np.logical_not(in_support),yq_predict),extract(np.logical_not(in_support),sample['yq']))
     return np.mean(list_acc_val_novel), np.mean(list_acc_val_autoencoder)
+
+def evaluate_translate(sample, encoder, decoder, input_lang, output_lang, max_length):
+    # Evaluate an episode
+    # 
+    # Input
+    #   sample : [dict] generated validation episode, produced by "build_sample"
+    #   ...
+    #   input_lang: Language object for input sequences
+    #   output_lang: Language object for output sequences
+    #   max_length : maximum length of generated output sequence
+    #
+    # Output
+    #   yq_predict : list of predicted output sequences for all items
+    encoder.eval()
+    decoder.eval()
+
+    # Run words through encoder
+    encoder_embedding, dict_encoder = encoder(sample)
+    encoder_embedding_steps = dict_encoder['embed_by_step']
+    memory_attn_steps = dict_encoder['attn_by_step']
+    
+    # Prepare input and output variables
+    nq = len(sample['yq'])
+    decoder_input = torch.tensor([output_lang.symbol2index[SOS_token]]*nq) # nq length tensor
+    decoder_hidden = decoder.initHidden(encoder_embedding)
+
+    # Store output words and attention states
+    decoded_words = []
+    
+    # Run through decoder
+    all_decoder_outputs = np.zeros((nq, max_length), dtype=int)
+    all_attn_by_time = [] # list (over time step) of batch_size x max_input_length tensors
+    if USE_CUDA:
+        decoder_input = decoder_input.cuda()    
+    for t in range(max_length):
+        if type(decoder) is AttnDecoderRNN:
+            decoder_output, decoder_hidden, attn_weights = decoder(decoder_input, decoder_hidden, encoder_embedding_steps)
+            all_attn_by_time.append(attn_weights)
+        elif type(decoder) is DecoderRNN:        
+            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+        else:
+            assert False
+        
+        #print(decoder_output)
+        # Choose top symbol from output
+        topv, topi = decoder_output.cpu().data.topk(1)
+        decoder_input = topi.view(-1)
+        if USE_CUDA:
+            decoder_input = decoder_input.cuda()
+        all_decoder_outputs[:,t] = topi.numpy().flatten()
+
+    # get predictions
+    in_support = np.array([x in sample['xs'] for x in sample['xq']])
+    yq_predict = []
+    for q in range(nq):
+        myseq = output_lang.symbolsFromVector(all_decoder_outputs[q,:])
+        yq_predict.append(myseq)
+    return yq_predict,in_support
 
 def evaluate(sample, encoder, decoder, input_lang, output_lang, max_length):
     # Evaluate an episode
@@ -489,9 +572,26 @@ def get_episode_generator(episode_type):
         input_lang = Lang(input_symbols_translate)
         output_lang = Lang(output_symbols_translate)
 
-        generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=10, nquery=5, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, ro_en_lst=ro_en_lst)
-        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=10, nquery=5, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, ro_en_lst=ro_en_lst)
-        #generate_episode_test = generate_episode_train 
+        in_sample = False
+        while not in_sample:
+            word_pair = random.choice(ro_en_lst)
+            for pair in translate_train:
+                if word_pair[0] in pair[0].split(' '):
+                    in_sample = True
+        
+        word_excluded_set = []
+        word_included_set = []
+        print(word_pair)
+        for pair in translate_train:
+            if word_pair[0] in pair[0].split(' '):
+                word_included_set.append(pair)
+            else:
+                word_excluded_set.append(pair)
+        
+        translate_train = word_excluded_set
+        translate_test = word_included_set
+        generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=10, nquery=5, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair=word_pair, ro_en_lst=ro_en_lst)
+        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=10, nquery=5, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair, ro_en_lst=ro_en_lst)
     else:
         raise Exception("episode_type is not valid" )
     return generate_episode_train, generate_episode_test, input_lang, output_lang
@@ -650,37 +750,16 @@ def generate_length(shuffle,nsupport,nquery,input_lang,output_lang,scan_tuples_s
     y_query = [d[1].split(' ') for d in D_query]
     return build_sample(x_support,y_support,x_query,y_query,input_lang,output_lang,identifier)
         
-def generate_translate(translate_set,input_lang,output_lang,nsupport,nquery,ro_en_lst,tabu_list=[]):
+def generate_translate(translate_set,input_lang,output_lang,nsupport,nquery,ro_en_lst,typ,word_pair,tabu_list=[]):
     
-    in_sample = False
-    while not in_sample:
-        word_pair = random.choice(ro_en_lst)
-        for pair in translate_set:
-            if word_pair[0] in pair[0].split(' '):
-                print(pair[0])
-                in_sample = True
-    #sent_pair = random.sample(translate_set,1)
-    #is_word = False
-    #while not is_word:
-    #    word = random.sample(sent_pair[0][0].split(' '),1)[0]
-    #    if re.match('[a-zA-Z\u00C0-\u00ff]+$',word):
-    #        is_word = True 
-    word_excluded_set = []
-    word_included_set = []
-    for pair in translate_set:
-        if word_pair[0] in pair[0].split(' '):
-            word_included_set.append(pair)
-        else:
-            word_excluded_set.append(pair)
-
-    sample = random.sample(word_excluded_set, nsupport + nquery - 1)
-    D_support = sample[:nquery - 1]
-    D_support.append(word_pair) 
-    D_query = sample[nquery - 1:] 
-    print(D_support)
-    print(D_query) 
-    print(len(D_support))
-    print(len(D_query))
+    if typ == 'train':
+        sample = random.sample(translate_set, nsupport + nquery - 1)
+        D_support = sample[:nquery - 1]
+        D_support.append(word_pair) 
+        D_query = sample[nquery - 1:] 
+    else:
+        D_query = random.sample(translate_set, nquery)
+        D_support = [word_pair]
 
     D_str = '\n'.join([d[0] + ' -> ' + d[1] for d in D_query])   
     identifier = make_hashable(D_str)        
@@ -803,6 +882,9 @@ if __name__ == "__main__":
                                              episode, float(episode) / float(num_episodes) * 100., avg_train_loss/counter, acc_val_retrieval, acc_val_gen))
                     avg_train_loss = 0.
                     counter = 0
+                else:
+                    evaluation_battery_translate(samples_val, encoder, decoder, input_lang, output_lang, max_length_eval)
+
                 if episode % 1000 == 0 or episode == num_episodes:
                     state = {'encoder_state_dict': encoder.state_dict(),
                                 'decoder_state_dict': decoder.state_dict(),
