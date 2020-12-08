@@ -558,7 +558,6 @@ def get_episode_generator(episode_type):
                                                             scan_tuples_support_variable=scan_length_train_var, scan_tuples_query_variable=scan_length_test_var, tabu_list=tabu_episodes)
     elif episode_type == 'translate': 
         translate_train = ge.load_scan_file('translate','train')
-        translate_test = ge.load_scan_file('translate','test')
        
         ro_en_lst = []
         ro_en = open('data/roen_dic.csv')
@@ -566,7 +565,7 @@ def get_episode_generator(episode_type):
             line = line.strip('\n').split(',')
             ro_en_lst.append([line[0],line[1]]) 
          
-        translate_all = translate_train+translate_test+ro_en_lst
+        translate_all = translate_train+ro_en_lst
         input_symbols_translate = get_unique_words([c[0] for c in translate_all])
         output_symbols_translate = get_unique_words([c[1] for c in translate_all])
         input_lang = Lang(input_symbols_translate)
@@ -575,23 +574,25 @@ def get_episode_generator(episode_type):
         in_sample = False
         while not in_sample:
             word_pair = random.choice(ro_en_lst)
+            print(word_pair)
             for pair in translate_train:
                 if word_pair[0] in pair[0].split(' '):
                     in_sample = True
         
-        word_excluded_set = []
-        word_included_set = []
-        print(word_pair)
-        for pair in translate_train:
-            if word_pair[0] in pair[0].split(' '):
-                word_included_set.append(pair)
-            else:
-                word_excluded_set.append(pair)
+                    word_excluded_set = []
+                    word_included_set = []
+                    for pair in translate_train:
+                        if word_pair[0] in pair[0].split(' '):
+                            word_included_set.append(pair)
+                        else:
+                            word_excluded_set.append(pair)
+                    if len(word_included_set) < 10 or len(word_excluded_set) < 100:
+                        in_sample = False
         
         translate_train = word_excluded_set
         translate_test = word_included_set
         generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=50, nquery=10, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair=word_pair, ro_en_lst=ro_en_lst)
-        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=50, nquery=10, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair, ro_en_lst=ro_en_lst)
+        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=1, nquery=len(translate_test), tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair, ro_en_lst=ro_en_lst)
     else:
         raise Exception("episode_type is not valid" )
     return generate_episode_train, generate_episode_test, input_lang, output_lang
