@@ -56,7 +56,7 @@ def load_scan_file(mytype,split):
 	#
 	# Output
 	#  commands : list of input/output strings (as tuples)
-	assert mytype in ['simple','addprim_jump','length','addprim_turn_left','all','template_around_right','viz','examine','translate']
+	assert mytype in ['simple','addprim_jump','length','addprim_turn_left','all','template_around_right','viz','examine'] or 'translate' in mytype
 	assert split in ['train','test']
 	fn = 'data/tasks_' + split + '_' + mytype + '.txt'
 	fid = open(fn,'r')
