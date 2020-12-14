@@ -574,6 +574,9 @@ def get_episode_generator(episode_type,word=''):
         if 'translate_all' in episode_type: 
             translate_train_raw = ge.load_scan_file('translate_all','train')
             translate_test_raw = ge.load_scan_file('translate_all','test')
+        elif '10_sep' in episode_type:
+            translate_train_raw = ge.load_scan_file('translate_10_sep','train')
+            translate_test_raw = ge.load_scan_file('translate_10_sep','test')
         elif '10' in episode_type:
             translate_train_raw = ge.load_scan_file('translate_10','train')
             translate_test_raw = ge.load_scan_file('translate_10','test')
@@ -584,7 +587,7 @@ def get_episode_generator(episode_type,word=''):
         translate_train = translate_train_raw
         translate_test = translate_test_raw
          
-        translate_all = translate_train+translate_test_raw
+        translate_all = translate_train+translate_test
         input_symbols_translate = get_unique_words([c[0] for c in translate_all])
         output_symbols_translate = get_unique_words([c[1] for c in translate_all])
         input_lang = Lang(input_symbols_translate)
