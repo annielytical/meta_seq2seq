@@ -22,6 +22,7 @@ import re
 import sys 
 from bleu import multi_list_bleu
 import nltk
+from efficiency.function import shell
 # --
 # Main routine for training meta seq2seq models
 # --
@@ -225,15 +226,33 @@ def evaluation_battery_translate(sample_eval_list, encoder, decoder, input_lang,
         out = []
         tgt = []
         for i in range(len(input_patterns)):
-            inp.append(input_patterns[i])
-            out.append(output_patterns[i]) 
-            tgt.append(target_patterns[i])
+            #inp.append(input_patterns[i])
+            #out.append(output_patterns[i]) 
+            #tgt.append(target_patterns[i])
+            inp.append(' '.join(input_patterns[i]))
+            out.append(' '.join(output_patterns[i])) 
+            tgt.append(' '.join(target_patterns[i]))
             print('Input: ' + ' '.join(input_patterns[i]))
             print('Output: ' + ' '.join(output_patterns[i])) 
             print('Target: ' + ' '.join(target_patterns[i])) 
+        
+        hyp = open('hyp_temp.txt','w')
+        ref = open('ref_temp.txt','w')
+        for line in out:
+            hyp.write(line + '\n')
+        for line in tgt:
+            ref.write(line + '\n')
+        hyp.close()
+        ref.close()
+        cmd = 'perl multi-bleu.perl ref_temp.txt < hyp_temp.txt'
+        stdout, stderr = shell(cmd)
+        if 'BLEU = ' in stdout:
+            num = stdout.split('BLEU = ', 1)[-1].split(',')[0]
+            print('BLEU: ' + num)
+        #smoothie = nltk.translate.bleu_score.SmoothingFunction().method4
+        #print(nltk.translate.bleu_score.corpus_bleu(tgt, out, smoothing_function=smoothie))
+        #print('BLEU: ' + str(multi_list_bleu(tgt,out))) 
 
-        smoothie = nltk.translate.bleu_score.SmoothingFunction().method4
-        print(nltk.translate.bleu_score.corpus_bleu(tgt, out, smoothing_function=smoothie))
 
 def evaluation_battery(sample_eval_list, encoder, decoder, input_lang, output_lang, max_length, verbose=False):
     # Evaluate a list of episodes
@@ -586,8 +605,14 @@ def get_episode_generator(episode_type,word=''):
 
         translate_train = translate_train_raw
         translate_test = translate_test_raw
-         
-        translate_all = translate_train+translate_test
+        
+        ro_en_lst = []
+        ro_en = open('data/roen_dic.csv')
+        for line in ro_en.readlines():
+            line = line.strip('\n').split(',')
+            ro_en_lst.append([line[0],line[1]]) 
+
+        translate_all = translate_train+translate_test+ro_en_lst
         input_symbols_translate = get_unique_words([c[0] for c in translate_all])
         output_symbols_translate = get_unique_words([c[1] for c in translate_all])
         input_lang = Lang(input_symbols_translate)
@@ -1006,4 +1031,7 @@ if __name__ == "__main__":
             print('Acc Retrieval (val): ' + str(round(acc_val_retrieval,1)))
             print('Acc Generalize (val): ' + str(round(acc_val_gen,1)))
         else:
-            evaluation_battery_translate(samples_val, encoder, decoder, input_lang, output_lang, max_length_eval)
+            print('Test DS: ')
+            evaluation_battery_translate([generate_episode_test([])], encoder, decoder, input_lang, output_lang, max_length_eval)
+            print('Train DS: ') 
+            evaluation_battery_translate([generate_episode_train([])], encoder, decoder, input_lang, output_lang, max_length_eval)
