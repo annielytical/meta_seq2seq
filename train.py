@@ -249,9 +249,6 @@ def evaluation_battery_translate(sample_eval_list, encoder, decoder, input_lang,
         if 'BLEU = ' in stdout:
             num = stdout.split('BLEU = ', 1)[-1].split(',')[0]
             print('BLEU: ' + num)
-        #smoothie = nltk.translate.bleu_score.SmoothingFunction().method4
-        #print(nltk.translate.bleu_score.corpus_bleu(tgt, out, smoothing_function=smoothie))
-        #print('BLEU: ' + str(multi_list_bleu(tgt,out))) 
 
 
 def evaluation_battery(sample_eval_list, encoder, decoder, input_lang, output_lang, max_length, verbose=False):
@@ -586,7 +583,7 @@ def get_episode_generator(episode_type,word=''):
         output_lang = Lang(output_symbols_translate)
 
         generate_episode_train = lambda tabu_episodes : generate_translate_route(translate_train, nsupport=32, nquery=32, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair='')
-        generate_episode_test = lambda tabu_episodes : generate_translate_route(translate_test, nsupport=32, nquery=len(translate_test), tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair='')
+        generate_episode_test = lambda tabu_episodes : generate_translate_route(translate_test, nsupport=32, nquery=32, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair='')
 
     elif 'translate' in episode_type:
 
@@ -606,13 +603,7 @@ def get_episode_generator(episode_type,word=''):
         translate_train = translate_train_raw
         translate_test = translate_test_raw
         
-        ro_en_lst = []
-        ro_en = open('data/roen_dic.csv')
-        for line in ro_en.readlines():
-            line = line.strip('\n').split(',')
-            ro_en_lst.append([line[0],line[1]]) 
-
-        translate_all = translate_train+translate_test+ro_en_lst
+        translate_all = translate_train+translate_test
         input_symbols_translate = get_unique_words([c[0] for c in translate_all])
         output_symbols_translate = get_unique_words([c[1] for c in translate_all])
         input_lang = Lang(input_symbols_translate)
@@ -620,8 +611,8 @@ def get_episode_generator(episode_type,word=''):
 
         word_pair = word.split(' ')
         
-        generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=32, nquery=32, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair=word_pair)
-        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=1, nquery=len(translate_test), tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair)
+        generate_episode_train = lambda tabu_episodes : generate_translate(translate_train, nsupport=100, nquery=50, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='train', word_pair=word_pair)
+        generate_episode_test = lambda tabu_episodes : generate_translate(translate_test, nsupport=1, nquery=50, tabu_list=tabu_episodes, input_lang=input_lang, output_lang=output_lang, typ='test', word_pair=word_pair)
     else:
         raise Exception("episode_type is not valid" )
     return generate_episode_train, generate_episode_test, input_lang, output_lang
@@ -785,8 +776,6 @@ def generate_translate_route(translate_set,input_lang,output_lang,nsupport,nquer
     D_query = translate_set[0:nquery] 
     D_support = translate_set[nquery:nquery+nsupport]
     
-    #print((D_support))
-    #print((D_query))
     x_support = [d[0].split(' ') for d in D_support]
     y_support = [d[1].split(' ') for d in D_support]
     x_query = [d[0].split(' ') for d in D_query]
@@ -936,6 +925,7 @@ if __name__ == "__main__":
             sample = generate_episode_train(tabu_episodes)
             # batch updates (where batch includes the entire support set)
             train_loss = train(sample, encoder, decoder, encoder_optimizer, decoder_optimizer, input_lang, output_lang)
+            avg_train_loss += train_loss
             if 'alt' in episode_type:
                 train_loss = train(sample, encoder_d, decoder, encoder_optimizer, decoder_optimizer, input_lang, output_lang)
             avg_train_loss += train_loss
@@ -1031,7 +1021,4 @@ if __name__ == "__main__":
             print('Acc Retrieval (val): ' + str(round(acc_val_retrieval,1)))
             print('Acc Generalize (val): ' + str(round(acc_val_gen,1)))
         else:
-            print('Test DS: ')
-            evaluation_battery_translate([generate_episode_test([])], encoder, decoder, input_lang, output_lang, max_length_eval)
-            print('Train DS: ') 
-            evaluation_battery_translate([generate_episode_train([])], encoder, decoder, input_lang, output_lang, max_length_eval)
+            evaluation_battery_translate(samples_val, encoder, decoder, input_lang, output_lang, max_length_eval)
