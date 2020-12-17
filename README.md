@@ -1,16 +1,16 @@
-# PyTorch implementation of Meta Sequence-to-Sequence Learning (with translation tasks)
+# PyTorch implementation of Meta Sequence-to-Sequence Learning (with translation tasks)  
 
-**Training a translation model**
-To run the model on the translation task on the default dataset (segmented by "nevoie" and limited to sequences of 15 tokens), you can type:
+**Training a translation model**  
+To run the model on the translation task on the default dataset (segmented by "nevoie" and limited to sequences of 15 tokens), you can type:  
 ```python
 python train.py --episode_type translate --word 'nevoie need'
 ```
-To run the model on the route translation task on the route dataset, you can type:
+To run the model on the route translation task on the route dataset, you can type:  
 ```python
 python train.py --episode_type translate_route
 ```
 
-**Original README from Lake**
+### Original README from Lake  
 Meta seq2seq learning is a form of memory-based meta-learning for seq2seq models. Vanilla neural nets struggle with compositionality, but they can be improved through training on a series of seq2seq problems to acquire the compositional skills needed for solving new problems. 
 
 <img src="data/meta_seq2seq.jpg" alt="Example of meta seq2seq architecture" width="600"/>
